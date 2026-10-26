@@ -31,23 +31,30 @@ The built-in sidebar sections stay at the top. The inbox takes the remaining 80%
 
 ## Requirements
 
-- opencode 2.0.x (tested on 2.0.27)
+- opencode 2.1.4 or newer
 - Node.js 22.18+ and npm, only for development
 
 ## Install
 
-Clone the repository, then point a global opencode plugin at it:
+Install globally with one command:
 
 ```sh
-git clone git@github.com:ionalexandru99/opencode-workspace.git ~/code/opencode-inbox
-mkdir -p ~/.config/opencode/plugins/inbox
-echo 'export { default } from "'"$HOME"'/code/opencode-inbox/src/tui.tsx"' \
-  > ~/.config/opencode/plugins/inbox/tui.tsx
+opencode plugin add github:ionalexandru99/opencode-workspace
 ```
 
-Restart opencode and open any session. The inbox appears in the right sidebar.
+Open any session. The inbox appears in the right sidebar; run `/reload` if it is not visible yet. No clone, Node.js installation or build step is needed.
 
-To update, run `git pull` in the clone and restart opencode. To uninstall, delete `~/.config/opencode/plugins/inbox`.
+To update:
+
+```sh
+opencode plugin update github:ionalexandru99/opencode-workspace
+```
+
+To uninstall:
+
+```sh
+opencode plugin remove github:ionalexandru99/opencode-workspace
+```
 
 ## Using it
 
@@ -73,11 +80,14 @@ opencode only shows the right sidebar by itself when the terminal is wider than 
 
 ```sh
 npm install
+npm run bundle
 npm test
 npm run typecheck
 ```
 
-The dependencies are only for types and tests. At runtime opencode provides `solid-js`, `@opentui/*` and the plugin API.
+Commit `dist/tui.js` after source changes. OpenCode skips package install scripts, so Git installations use this precompiled bundle. The build leaves `solid-js`, `@opentui/*` and the plugin API external; opencode provides them at runtime.
+
+To verify the packaged Git installation in an isolated opencode TUI, run `npm run test:install` (requires opencode, Git and Python 3 on macOS or Linux).
 
 ```
 src/
