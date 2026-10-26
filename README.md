@@ -32,7 +32,7 @@ The built-in sidebar sections stay at the top. The inbox takes the remaining 80%
 ## Requirements
 
 - opencode 2.0.x (tested on 2.0.27)
-- Node.js 22+ and npm, only for development
+- Node.js 22.18+ and npm, only for development
 
 ## Install
 

@@ -29,6 +29,9 @@ const REFRESH_ON = [
   "form.cancelled",
 ] as const
 
+type PendingKind = "approval" | "input"
+type Pending = { readonly sessionID: string }
+
 const MODEL_CHANGED_ON = ["session.execution.started", "session.model.selected"] as const
 
 const DEBOUNCE_MS = 250
@@ -48,16 +51,30 @@ export function createSessionSource(ctx: Plugin.Context) {
     return reply?.type === "assistant" ? reply.model.id : undefined
   }
 
-  async function pendingSessionIDs(directory: string) {
-    const location = { directory }
-    const [permissions, forms] = await Promise.all([
-      ctx.client.permission.request.list({ location }).catch(() => undefined),
-      ctx.client.form.list({ location }).catch(() => undefined),
-    ])
-    return {
-      approval: permissions?.data.map((request) => request.sessionID) ?? [],
-      input: forms?.data.map((form) => form.sessionID) ?? [],
-    }
+  const pendingLookups: Record<PendingKind, (directory: string) => Promise<{ readonly data: readonly Pending[] }>> = {
+    approval: (directory) => ctx.client.permission.request.list({ location: { directory } }),
+    input: (directory) => ctx.client.form.list({ location: { directory } }),
+  }
+
+  function previousPending(kind: PendingKind, directory: string) {
+    const inDirectory = new Set(
+      snapshot.sessions.filter((session) => session.location.directory === directory).map((session) => session.id),
+    )
+    return snapshot[kind].filter((sessionID) => inDirectory.has(sessionID))
+  }
+
+  async function pendingSessionIDs(kind: PendingKind, directories: string[]) {
+    const perDirectory = await Promise.all(
+      directories.map(async (directory) => {
+        try {
+          return (await pendingLookups[kind](directory)).data.map((pending) => pending.sessionID)
+        } catch (error) {
+          console.error(`inbox: failed to load ${kind} requests for ${directory}`, error)
+          return previousPending(kind, directory)
+        }
+      }),
+    )
+    return perDirectory.flat()
   }
 
   async function lookupModels(sessions: SessionInfo[]) {
@@ -73,7 +90,11 @@ export function createSessionSource(ctx: Plugin.Context) {
     ])
     const sessions = list.data.filter((session) => !session.parentID && !session.time.archived)
     const directories = [...new Set(sessions.map((session) => session.location.directory))]
-    const [pending, found] = await Promise.all([Promise.all(directories.map(pendingSessionIDs)), lookupModels(sessions)])
+    const [approval, input, found] = await Promise.all([
+      pendingSessionIDs("approval", directories),
+      pendingSessionIDs("input", directories),
+      lookupModels(sessions),
+    ])
     if (current !== generation) return
     for (const [sessionID, model] of found) if (model) models.set(sessionID, model)
     setSnapshot(
@@ -81,8 +102,8 @@ export function createSessionSource(ctx: Plugin.Context) {
         sessions,
         models: Object.fromEntries(models),
         running: Object.keys(active),
-        approval: pending.flatMap((ids) => ids.approval),
-        input: pending.flatMap((ids) => ids.input),
+        approval,
+        input,
       }),
     )
   }
