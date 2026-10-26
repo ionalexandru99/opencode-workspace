@@ -11,15 +11,16 @@ const tomorrowMorning = (now: number) => {
   return date.getTime()
 }
 
-export async function showActions(ui: Plugin.Context["ui"], marks: Marks, entry: Entry, now: number) {
+export async function showActions(ui: Plugin.Context["ui"], marks: Marks, entry: Entry) {
+  const now = Date.now()
   const section = sectionOf(entry, now)
   const snooze =
     section === "snoozed"
-      ? [{ title: "Wake now", value: () => marks.snooze(entry.id, undefined) }]
+      ? [{ title: "Wake now", value: (at: number) => marks.snooze(entry.id, undefined, at) }]
       : [
-          { title: "Snooze 1 hour", value: () => marks.snooze(entry.id, now + HOUR) },
-          { title: "Snooze 4 hours", value: () => marks.snooze(entry.id, now + 4 * HOUR) },
-          { title: "Snooze until tomorrow 09:00", value: () => marks.snooze(entry.id, tomorrowMorning(now)) },
+          { title: "Snooze 1 hour", value: (at: number) => marks.snooze(entry.id, at + HOUR, at) },
+          { title: "Snooze 4 hours", value: (at: number) => marks.snooze(entry.id, at + 4 * HOUR, at) },
+          { title: "Snooze until tomorrow 09:00", value: (at: number) => marks.snooze(entry.id, tomorrowMorning(at), at) },
         ]
   const options = [
     entry.mark.pinned
@@ -28,9 +29,9 @@ export async function showActions(ui: Plugin.Context["ui"], marks: Marks, entry:
     ...snooze,
     section === "settled"
       ? { title: "Unsettle", value: () => marks.settle(entry.id, undefined) }
-      : { title: "Settle", value: () => marks.settle(entry.id, now) },
+      : { title: "Settle", value: (at: number) => marks.settle(entry.id, at) },
   ]
 
   const action = await ui.dialog.select({ title: entry.title, options })
-  await action?.()
+  await action?.(Date.now())
 }

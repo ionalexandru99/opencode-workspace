@@ -40,11 +40,24 @@ export function createSessionSource(ctx: Plugin.Context) {
   const [snapshot, setSnapshot] = createStore<Snapshot>({ sessions: [], models: {}, running: [], approval: [], input: [] })
   const models = new Map<string, string>()
   let timer: ReturnType<typeof setTimeout> | undefined
+  let generation = 0
 
   async function lastReplyModel(sessionID: string) {
-    const replies = await ctx.client.message.list({ sessionID, type: "assistant", limit: 1, order: "desc" })
-    const reply = replies.data[0]
+    const replies = await ctx.client.message.list({ sessionID, type: "assistant", limit: 1, order: "desc" }).catch(() => undefined)
+    const reply = replies?.data[0]
     return reply?.type === "assistant" ? reply.model.id : undefined
+  }
+
+  async function pendingSessionIDs(directory: string) {
+    const location = { directory }
+    const [permissions, forms] = await Promise.all([
+      ctx.client.permission.request.list({ location }).catch(() => undefined),
+      ctx.client.form.list({ location }).catch(() => undefined),
+    ])
+    return {
+      approval: permissions?.data.map((request) => request.sessionID) ?? [],
+      input: forms?.data.map((form) => form.sessionID) ?? [],
+    }
   }
 
   async function loadModels(sessions: SessionInfo[]) {
@@ -55,30 +68,22 @@ export function createSessionSource(ctx: Plugin.Context) {
   }
 
   async function load() {
+    const current = ++generation
     const [list, active] = await Promise.all([
       ctx.client.session.list({ limit: SESSION_LIMIT, order: "desc", parentID: null }),
       ctx.client.session.active(),
     ])
     const sessions = list.data.filter((session) => !session.parentID && !session.time.archived)
     const directories = [...new Set(sessions.map((session) => session.location.directory))]
-    const [pending, knownModels] = await Promise.all([
-      Promise.all(
-        directories.map((directory) =>
-          Promise.all([
-            ctx.client.permission.request.list({ location: { directory } }),
-            ctx.client.form.list({ location: { directory } }),
-          ]),
-        ),
-      ),
-      loadModels(sessions),
-    ])
+    const [pending, knownModels] = await Promise.all([Promise.all(directories.map(pendingSessionIDs)), loadModels(sessions)])
+    if (current !== generation) return
     setSnapshot(
       reconcile({
         sessions,
         models: knownModels,
         running: Object.keys(active),
-        approval: pending.flatMap(([permissions]) => permissions.data.map((request) => request.sessionID)),
-        input: pending.flatMap(([, forms]) => forms.data.map((form) => form.sessionID)),
+        approval: pending.flatMap((ids) => ids.approval),
+        input: pending.flatMap((ids) => ids.input),
       }),
     )
   }

@@ -29,10 +29,10 @@ export function createInbox(ctx: Plugin.Context) {
         projectOf: (session) => projectName(ctx.data.project.get(session.projectID), session.location.directory),
       }),
     open(entry: Entry, now: number) {
-      if (statusOf(entry, now) === "woke") void marks.snooze(entry.id, undefined)
+      if (statusOf(entry, now) === "woke") void marks.snooze(entry.id, undefined, now)
       ctx.ui.router.navigate({ type: "session", sessionID: entry.id })
     },
-    actions: (entry: Entry, now: number) => showActions(ctx.ui, marks, entry, now),
+    actions: (entry: Entry) => showActions(ctx.ui, marks, entry),
     stop: source.stop,
   }
 }

@@ -13,8 +13,8 @@ export function createMarks(storage: Plugin.Context["storage"]) {
   return {
     of: (sessionID: string): Mark => marks[sessionID] ?? {},
     pin: (sessionID: string, pinned: boolean) => patch(sessionID, { pinned }),
-    snooze: (sessionID: string, snoozedUntil: number | undefined) =>
-      patch(sessionID, { snoozedUntil, settledAt: undefined }),
+    snooze: (sessionID: string, snoozedUntil: number | undefined, now: number) =>
+      patch(sessionID, { snoozedAt: snoozedUntil === undefined ? undefined : now, snoozedUntil, settledAt: undefined }),
     settle: (sessionID: string, settledAt: number | undefined) =>
       patch(sessionID, { settledAt, snoozedUntil: undefined, pinned: false }),
   }

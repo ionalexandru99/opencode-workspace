@@ -13,6 +13,7 @@ export type Signals = {
 
 export type Mark = {
   readonly pinned?: boolean
+  readonly snoozedAt?: number
   readonly snoozedUntil?: number
   readonly settledAt?: number
 }
@@ -31,15 +32,20 @@ export type Sections = Record<SectionKey, Entry[]>
 
 const MINUTE = 60_000
 
-const needsUser = ({ signals }: Entry) => signals.approval || signals.input || signals.failed
+const isAsking = ({ signals }: Entry) => signals.approval || signals.input
+
+const failedSince = (entry: Entry, time = 0) => entry.signals.failed && entry.updated > time
 
 const isSnoozed = (entry: Entry, now: number) =>
-  entry.mark.snoozedUntil !== undefined && entry.mark.snoozedUntil > now && !needsUser(entry)
+  entry.mark.snoozedUntil !== undefined &&
+  entry.mark.snoozedUntil > now &&
+  !isAsking(entry) &&
+  !failedSince(entry, entry.mark.snoozedAt)
 
 const isSettled = (entry: Entry) =>
   entry.mark.settledAt !== undefined &&
   entry.updated <= entry.mark.settledAt &&
-  !needsUser(entry) &&
+  !isAsking(entry) &&
   !entry.signals.running
 
 export function statusOf(entry: Entry, now: number): Status {
@@ -56,7 +62,7 @@ export function statusOf(entry: Entry, now: number): Status {
 export function sectionOf(entry: Entry, now: number): SectionKey {
   if (isSettled(entry)) return "settled"
   if (isSnoozed(entry, now)) return "snoozed"
-  if (entry.signals.running && !needsUser(entry)) return "working"
+  if (entry.signals.running && !isAsking(entry)) return "working"
   if (entry.mark.pinned) return "pinned"
   return "active"
 }

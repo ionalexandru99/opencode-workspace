@@ -49,7 +49,7 @@ export function InboxSidebar(props: { readonly inbox: Inbox; readonly sessionID:
           now={now()}
           current={entry.id === props.sessionID}
           onOpen={() => props.inbox.open(entry, now())}
-          onActions={() => void props.inbox.actions(entry, now())}
+          onActions={() => void props.inbox.actions(entry)}
         />
       )}
     </For>

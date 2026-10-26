@@ -85,6 +85,43 @@ describe("sectionOf", () => {
     assert.equal(section, "active")
   })
 
+  it("lets a failed session be settled", () => {
+    // Arrange
+    const session = entry({ mark: { settledAt: NOW }, signals: signals({ failed: true }) })
+
+    // Act
+    const section = sectionOf(session, NOW)
+
+    // Assert
+    assert.equal(section, "settled")
+  })
+
+  it("keeps a failed session snoozed when it failed before the snooze", () => {
+    // Arrange
+    const session = entry({ mark: { snoozedAt: NOW - MIN, snoozedUntil: NOW + 60 * MIN }, signals: signals({ failed: true }) })
+
+    // Act
+    const section = sectionOf(session, NOW)
+
+    // Assert
+    assert.equal(section, "snoozed")
+  })
+
+  it("wakes a snoozed session that fails after the snooze", () => {
+    // Arrange
+    const session = entry({
+      updated: NOW,
+      mark: { snoozedAt: NOW - MIN, snoozedUntil: NOW + 60 * MIN },
+      signals: signals({ failed: true }),
+    })
+
+    // Act
+    const section = sectionOf(session, NOW)
+
+    // Assert
+    assert.equal(section, "active")
+  })
+
   it("moves a running session to the working shelf even when pinned", () => {
     // Arrange
     const session = entry({ mark: { pinned: true }, signals: signals({ running: true }) })
