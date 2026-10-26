@@ -12,6 +12,7 @@ const isUnread = ({ time }: SessionInfo) => time.idle !== undefined && time.idle
 
 export function toEntries(snapshot: Snapshot, options: EntryOptions): Entry[] {
   const running = new Set(snapshot.running)
+  const waiting = new Set(snapshot.waiting)
   const approval = new Set(snapshot.approval)
   const input = new Set(snapshot.input)
 
@@ -24,6 +25,7 @@ export function toEntries(snapshot: Snapshot, options: EntryOptions): Entry[] {
     finished: session.time.idle,
     signals: {
       running: running.has(session.id),
+      waiting: waiting.has(session.id),
       approval: approval.has(session.id),
       input: input.has(session.id),
       failed: session.outcome === "failed",

@@ -8,6 +8,7 @@ const RIGHT_BUTTON = 2
 
 const GLYPH: Record<Status, string> = {
   working: "◐",
+  waiting: "◷",
   approval: "!",
   input: "?",
   failed: "✕",
@@ -18,6 +19,7 @@ const GLYPH: Record<Status, string> = {
 
 const LABEL: Record<Status, string> = {
   working: "Working",
+  waiting: "Waiting",
   approval: "Approval",
   input: "Input",
   failed: "Failed",
@@ -29,6 +31,7 @@ const LABEL: Record<Status, string> = {
 const color = (theme: Theme, status: Status) =>
   ({
     working: theme.text.feedback.info.base,
+    waiting: theme.text.muted,
     approval: theme.text.feedback.warning.base,
     input: theme.hue.accent[500],
     failed: theme.text.feedback.error.base,

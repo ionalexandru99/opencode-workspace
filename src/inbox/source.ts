@@ -6,6 +6,7 @@ export type Snapshot = {
   readonly sessions: SessionInfo[]
   readonly models: Record<string, string>
   readonly running: string[]
+  readonly waiting: string[]
   readonly approval: string[]
   readonly input: string[]
 }
@@ -27,10 +28,14 @@ const REFRESH_ON = [
   "form.created",
   "form.replied",
   "form.cancelled",
+  "session.shell.started",
+  "session.shell.ended",
+  "shell.created",
+  "shell.exited",
+  "shell.deleted",
 ] as const
 
-type PendingKind = "approval" | "input"
-type Pending = { readonly sessionID: string }
+type LookupKind = "waiting" | "approval" | "input"
 
 const MODEL_CHANGED_ON = ["session.execution.started", "session.model.selected"] as const
 
@@ -40,7 +45,7 @@ const SESSION_LIMIT = 100
 export type SessionSource = ReturnType<typeof createSessionSource>
 
 export function createSessionSource(ctx: Plugin.Context) {
-  const [snapshot, setSnapshot] = createStore<Snapshot>({ sessions: [], models: {}, running: [], approval: [], input: [] })
+  const [snapshot, setSnapshot] = createStore<Snapshot>({ sessions: [], models: {}, running: [], waiting: [], approval: [], input: [] })
   const models = new Map<string, string>()
   let timer: ReturnType<typeof setTimeout> | undefined
   let generation = 0
@@ -51,26 +56,33 @@ export function createSessionSource(ctx: Plugin.Context) {
     return reply?.type === "assistant" ? reply.model.id : undefined
   }
 
-  const pendingLookups: Record<PendingKind, (directory: string) => Promise<{ readonly data: readonly Pending[] }>> = {
-    approval: (directory) => ctx.client.permission.request.list({ location: { directory } }),
-    input: (directory) => ctx.client.form.list({ location: { directory } }),
+  const lookups: Record<LookupKind, (directory: string) => Promise<string[]>> = {
+    waiting: async (directory) =>
+      (await ctx.client.shell.list({ location: { directory } })).data
+        .filter((shell) => shell.status === "running")
+        .map((shell) => shell.metadata.sessionID)
+        .filter((sessionID): sessionID is string => typeof sessionID === "string"),
+    approval: async (directory) =>
+      (await ctx.client.permission.request.list({ location: { directory } })).data.map((pending) => pending.sessionID),
+    input: async (directory) =>
+      (await ctx.client.form.list({ location: { directory } })).data.map((pending) => pending.sessionID),
   }
 
-  function previousPending(kind: PendingKind, directory: string) {
+  function previousSessionIDs(kind: LookupKind, directory: string) {
     const inDirectory = new Set(
       snapshot.sessions.filter((session) => session.location.directory === directory).map((session) => session.id),
     )
     return snapshot[kind].filter((sessionID) => inDirectory.has(sessionID))
   }
 
-  async function pendingSessionIDs(kind: PendingKind, directories: string[]) {
+  async function sessionIDs(kind: LookupKind, directories: string[]) {
     const perDirectory = await Promise.all(
       directories.map(async (directory) => {
         try {
-          return (await pendingLookups[kind](directory)).data.map((pending) => pending.sessionID)
+          return await lookups[kind](directory)
         } catch (error) {
-          console.error(`inbox: failed to load ${kind} requests for ${directory}`, error)
-          return previousPending(kind, directory)
+          console.error(`inbox: failed to load ${kind} sessions for ${directory}`, error)
+          return previousSessionIDs(kind, directory)
         }
       }),
     )
@@ -90,9 +102,10 @@ export function createSessionSource(ctx: Plugin.Context) {
     ])
     const sessions = list.data.filter((session) => !session.parentID && !session.time.archived)
     const directories = [...new Set(sessions.map((session) => session.location.directory))]
-    const [approval, input, found] = await Promise.all([
-      pendingSessionIDs("approval", directories),
-      pendingSessionIDs("input", directories),
+    const [waiting, approval, input, found] = await Promise.all([
+      sessionIDs("waiting", directories),
+      sessionIDs("approval", directories),
+      sessionIDs("input", directories),
       lookupModels(sessions),
     ])
     if (current !== generation) return
@@ -102,6 +115,7 @@ export function createSessionSource(ctx: Plugin.Context) {
         sessions,
         models: Object.fromEntries(models),
         running: Object.keys(active),
+        waiting,
         approval,
         input,
       }),
