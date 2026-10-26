@@ -63,15 +63,26 @@ describe("sectionOf", () => {
     assert.equal(section, "settled")
   })
 
-  it("brings a settled session back when it has new activity", () => {
+  it("brings a settled session back when a new run finishes", () => {
     // Arrange
-    const session = entry({ updated: NOW, mark: { settledAt: NOW - MIN } })
+    const session = entry({ finished: NOW, mark: { settledAt: NOW - MIN } })
 
     // Act
     const section = sectionOf(session, NOW)
 
     // Assert
     assert.equal(section, "active")
+  })
+
+  it("keeps a settled session settled when it is only renamed", () => {
+    // Arrange
+    const session = entry({ updated: NOW, finished: NOW - 2 * MIN, mark: { settledAt: NOW - MIN } })
+
+    // Act
+    const section = sectionOf(session, NOW)
+
+    // Assert
+    assert.equal(section, "settled")
   })
 
   it("wakes a snoozed session early when it asks for input", () => {
@@ -110,7 +121,7 @@ describe("sectionOf", () => {
   it("wakes a snoozed session that fails after the snooze", () => {
     // Arrange
     const session = entry({
-      updated: NOW,
+      finished: NOW,
       mark: { snoozedAt: NOW - MIN, snoozedUntil: NOW + 60 * MIN },
       signals: signals({ failed: true }),
     })

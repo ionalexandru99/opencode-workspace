@@ -24,6 +24,7 @@ export type Entry = {
   readonly project: string
   readonly model?: string
   readonly updated: number
+  readonly finished?: number
   readonly signals: Signals
   readonly mark: Mark
 }
@@ -34,7 +35,9 @@ const MINUTE = 60_000
 
 const isAsking = ({ signals }: Entry) => signals.approval || signals.input
 
-const failedSince = (entry: Entry, time = 0) => entry.signals.failed && entry.updated > time
+const finishedAfter = (entry: Entry, time = 0) => (entry.finished ?? 0) > time
+
+const failedSince = (entry: Entry, time?: number) => entry.signals.failed && finishedAfter(entry, time)
 
 const isSnoozed = (entry: Entry, now: number) =>
   entry.mark.snoozedUntil !== undefined &&
@@ -44,7 +47,7 @@ const isSnoozed = (entry: Entry, now: number) =>
 
 const isSettled = (entry: Entry) =>
   entry.mark.settledAt !== undefined &&
-  entry.updated <= entry.mark.settledAt &&
+  !finishedAfter(entry, entry.mark.settledAt) &&
   !isAsking(entry) &&
   !entry.signals.running
 

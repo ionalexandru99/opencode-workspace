@@ -21,6 +21,7 @@ export function toEntries(snapshot: Snapshot, options: EntryOptions): Entry[] {
     project: options.projectOf(session),
     model: session.model?.id ?? snapshot.models[session.id],
     updated: session.time.updated,
+    finished: session.time.idle,
     signals: {
       running: running.has(session.id),
       approval: approval.has(session.id),

@@ -60,11 +60,9 @@ export function createSessionSource(ctx: Plugin.Context) {
     }
   }
 
-  async function loadModels(sessions: SessionInfo[]) {
+  async function lookupModels(sessions: SessionInfo[]) {
     const missing = sessions.filter((session) => !session.model && !models.has(session.id))
-    const found = await Promise.all(missing.map(async (session) => [session.id, await lastReplyModel(session.id)] as const))
-    for (const [sessionID, model] of found) if (model) models.set(sessionID, model)
-    return Object.fromEntries(models)
+    return Promise.all(missing.map(async (session) => [session.id, await lastReplyModel(session.id)] as const))
   }
 
   async function load() {
@@ -75,12 +73,13 @@ export function createSessionSource(ctx: Plugin.Context) {
     ])
     const sessions = list.data.filter((session) => !session.parentID && !session.time.archived)
     const directories = [...new Set(sessions.map((session) => session.location.directory))]
-    const [pending, knownModels] = await Promise.all([Promise.all(directories.map(pendingSessionIDs)), loadModels(sessions)])
+    const [pending, found] = await Promise.all([Promise.all(directories.map(pendingSessionIDs)), lookupModels(sessions)])
     if (current !== generation) return
+    for (const [sessionID, model] of found) if (model) models.set(sessionID, model)
     setSnapshot(
       reconcile({
         sessions,
-        models: knownModels,
+        models: Object.fromEntries(models),
         running: Object.keys(active),
         approval: pending.flatMap((ids) => ids.approval),
         input: pending.flatMap((ids) => ids.input),
@@ -94,7 +93,12 @@ export function createSessionSource(ctx: Plugin.Context) {
   }
 
   const unsubscribe = [
-    ...MODEL_CHANGED_ON.map((type) => ctx.data.on(type, (event) => models.delete(event.data.sessionID))),
+    ...MODEL_CHANGED_ON.map((type) =>
+      ctx.data.on(type, (event) => {
+        generation++
+        models.delete(event.data.sessionID)
+      }),
+    ),
     ...REFRESH_ON.map((type) => ctx.data.on(type, refresh)),
   ]
   refresh()
