@@ -76,12 +76,12 @@ export function Row(props: {
         </text>
       </box>
       <box flexDirection="row" paddingLeft={2} gap={1}>
-        <text fg={props.theme.text.muted} wrapMode="none" truncate flexShrink={1} minWidth={0}>
+        <text fg={props.theme.text.muted} wrapMode="none" truncate flexShrink={4} minWidth={0}>
           {props.entry.project}
         </text>
         <Show when={props.entry.model}>
           {(model) => (
-            <text flexShrink={0} fg={props.theme.text.muted}>
+            <text fg={props.theme.text.muted} wrapMode="none" truncate flexShrink={1} minWidth={0}>
               · {model()}
             </text>
           )}
