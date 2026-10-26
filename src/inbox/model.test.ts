@@ -188,6 +188,20 @@ describe("listRows", () => {
     // Assert
     assert.equal(rows, 4 + 3 + 3 + 1)
   })
+
+  it("counts settled entries as one line", () => {
+    // Arrange
+    const sections = groupSections(
+      [entry({ id: "a", mark: { settledAt: NOW } }), entry({ id: "b", mark: { settledAt: NOW } })],
+      NOW,
+    )
+
+    // Act
+    const rows = listRows(sections, { working: false, snoozed: true, settled: false })
+
+    // Assert
+    assert.equal(rows, 2 + 1 + 2)
+  })
 })
 
 describe("relativeTime", () => {

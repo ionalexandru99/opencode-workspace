@@ -78,13 +78,16 @@ export function groupSections(entries: readonly Entry[], now: number): Sections 
 }
 
 export const SHELVES: readonly ShelfKey[] = ["working", "snoozed", "settled"]
-export const ENTRY_ROWS = 2
+
+export const isCompact = (key: SectionKey) => key === "settled"
+
+const sectionRows = (sections: Sections, key: SectionKey) => sections[key].length * (isCompact(key) ? 1 : 2)
 
 export function listRows(sections: Sections, collapsed: Collapsed) {
-  const pinned = sections.pinned.length ? 1 + sections.pinned.length * ENTRY_ROWS + 1 : 0
-  const active = 1 + Math.max(1, sections.active.length * ENTRY_ROWS)
+  const pinned = sections.pinned.length ? 1 + sectionRows(sections, "pinned") + 1 : 0
+  const active = 1 + Math.max(1, sectionRows(sections, "active"))
   const shelves = SHELVES.filter((key) => sections[key].length).reduce(
-    (rows, key) => rows + 1 + (collapsed[key] ? 0 : sections[key].length * ENTRY_ROWS),
+    (rows, key) => rows + 1 + (collapsed[key] ? 0 : sectionRows(sections, key)),
     0,
   )
   return pinned + active + shelves
