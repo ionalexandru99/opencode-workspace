@@ -31,9 +31,13 @@ class PackageInstall(unittest.TestCase):
             for command in (
                 ["git", "init", "-b", "experimental/install-test"],
                 ["git", "add", "."],
-                ["git", "-c", "user.name=Install test", "-c", "user.email=test@example.invalid", "commit", "-m", "Package fixture"],
+                [
+                    "git", "-c", "user.name=Install test", "-c", "user.email=test@example.invalid",
+                    "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null",
+                    "commit", "-m", "Package fixture",
+                ],
             ):
-                subprocess.run(command, cwd=repository, check=True, capture_output=True)
+                subprocess.run(command, cwd=repository, check=True, capture_output=True, timeout=30)
             environment = {
                 key: value for key, value in os.environ.items()
                 if not key.startswith("OPENCODE_")
