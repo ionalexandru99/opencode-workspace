@@ -6,10 +6,13 @@ import { Plugin } from "@opencode/plugin/tui";
 var isAsking = ({ signals }) => signals.approval || signals.input, finishedAfter = (entry, time = 0) => (entry.finished ?? 0) > time, failedSince = (entry, time) => entry.signals.failed && finishedAfter(entry, time), isSnoozed = (entry, now) => entry.mark.snoozedUntil !== void 0 && entry.mark.snoozedUntil > now && !isAsking(entry) && !failedSince(entry, entry.mark.snoozedAt), isSettled = (entry) => entry.mark.settledAt !== void 0 && !finishedAfter(entry, entry.mark.settledAt) && !isAsking(entry) && !entry.signals.running;
 function statusOf(entry, now) {
   let { signals, mark } = entry;
-  return signals.approval ? "approval" : signals.input ? "input" : signals.running ? "working" : signals.failed ? "failed" : mark.snoozedUntil !== void 0 && mark.snoozedUntil <= now ? "woke" : signals.unread ? "done" : "idle";
+  return signals.approval ? "approval" : signals.input ? "input" : signals.running ? "working" : signals.failed ? "failed" : mark.snoozedUntil !== void 0 && mark.snoozedUntil <= now ? "woke" : signals.unread ? "done" : signals.waiting ? "waiting" : "idle";
 }
 function sectionOf(entry, now) {
-  return isSettled(entry) ? "settled" : isSnoozed(entry, now) ? "snoozed" : entry.signals.running && !isAsking(entry) ? "working" : entry.mark.pinned ? "pinned" : "active";
+  if (isSettled(entry)) return "settled";
+  if (isSnoozed(entry, now)) return "snoozed";
+  let status = statusOf(entry, now);
+  return status === "working" || status === "waiting" ? "working" : entry.mark.pinned ? "pinned" : "active";
 }
 function groupSections(entries, now) {
   let sections = { pinned: [], active: [], working: [], snoozed: [], settled: [] };
@@ -60,7 +63,7 @@ async function showActions(ui, marks, entry) {
 // src/inbox/entries.ts
 var isUnread = ({ time }) => time.idle !== void 0 && time.idle > (time.viewed ?? 0);
 function toEntries(snapshot, options) {
-  let running = new Set(snapshot.running), approval = new Set(snapshot.approval), input = new Set(snapshot.input);
+  let running = new Set(snapshot.running), waiting = new Set(snapshot.waiting), approval = new Set(snapshot.approval), input = new Set(snapshot.input);
   return snapshot.sessions.map((session) => ({
     id: session.id,
     title: session.title ?? "Untitled session",
@@ -70,6 +73,7 @@ function toEntries(snapshot, options) {
     finished: session.time.idle,
     signals: {
       running: running.has(session.id),
+      waiting: waiting.has(session.id),
       approval: approval.has(session.id),
       input: input.has(session.id),
       failed: session.outcome === "failed",
@@ -113,32 +117,38 @@ var REFRESH_ON = [
   "permission.replied",
   "form.created",
   "form.replied",
-  "form.cancelled"
+  "form.cancelled",
+  "session.shell.started",
+  "session.shell.ended",
+  "shell.created",
+  "shell.exited",
+  "shell.deleted"
 ], MODEL_CHANGED_ON = ["session.execution.started", "session.model.selected"], DEBOUNCE_MS = 250, SESSION_LIMIT = 100;
 function createSessionSource(ctx) {
-  let [snapshot, setSnapshot] = createStore({ sessions: [], models: {}, running: [], approval: [], input: [] }), models = /* @__PURE__ */ new Map(), timer, generation = 0;
+  let [snapshot, setSnapshot] = createStore({ sessions: [], models: {}, running: [], waiting: [], approval: [], input: [] }), models = /* @__PURE__ */ new Map(), timer, generation = 0;
   async function lastReplyModel(sessionID) {
     let reply = (await ctx.client.message.list({ sessionID, type: "assistant", limit: 1, order: "desc" }).catch(() => {
     }))?.data[0];
     return reply?.type === "assistant" ? reply.model.id : void 0;
   }
-  let pendingLookups = {
-    approval: (directory) => ctx.client.permission.request.list({ location: { directory } }),
-    input: (directory) => ctx.client.form.list({ location: { directory } })
+  let lookups = {
+    waiting: async (directory) => (await ctx.client.shell.list({ location: { directory } })).data.filter((shell) => shell.status === "running").map((shell) => shell.metadata.sessionID).filter((sessionID) => typeof sessionID == "string"),
+    approval: async (directory) => (await ctx.client.permission.request.list({ location: { directory } })).data.map((pending) => pending.sessionID),
+    input: async (directory) => (await ctx.client.form.list({ location: { directory } })).data.map((pending) => pending.sessionID)
   };
-  function previousPending(kind, directory) {
+  function previousSessionIDs(kind, directory) {
     let inDirectory = new Set(
       snapshot.sessions.filter((session) => session.location.directory === directory).map((session) => session.id)
     );
     return snapshot[kind].filter((sessionID) => inDirectory.has(sessionID));
   }
-  async function pendingSessionIDs(kind, directories) {
+  async function sessionIDs(kind, directories) {
     return (await Promise.all(
       directories.map(async (directory) => {
         try {
-          return (await pendingLookups[kind](directory)).data.map((pending) => pending.sessionID);
+          return await lookups[kind](directory);
         } catch (error) {
-          return console.error(`inbox: failed to load ${kind} requests for ${directory}`, error), previousPending(kind, directory);
+          return console.error(`inbox: failed to load ${kind} sessions for ${directory}`, error), previousSessionIDs(kind, directory);
         }
       })
     )).flat();
@@ -151,9 +161,10 @@ function createSessionSource(ctx) {
     let current = ++generation, [list, active] = await Promise.all([
       ctx.client.session.list({ limit: SESSION_LIMIT, order: "desc", parentID: null }),
       ctx.client.session.active()
-    ]), sessions = list.data.filter((session) => !session.parentID && !session.time.archived), directories = [...new Set(sessions.map((session) => session.location.directory))], [approval, input, found] = await Promise.all([
-      pendingSessionIDs("approval", directories),
-      pendingSessionIDs("input", directories),
+    ]), sessions = list.data.filter((session) => !session.parentID && !session.time.archived), directories = [...new Set(sessions.map((session) => session.location.directory))], [waiting, approval, input, found] = await Promise.all([
+      sessionIDs("waiting", directories),
+      sessionIDs("approval", directories),
+      sessionIDs("input", directories),
       lookupModels(sessions)
     ]);
     if (current === generation) {
@@ -163,6 +174,7 @@ function createSessionSource(ctx) {
           sessions,
           models: Object.fromEntries(models),
           running: Object.keys(active),
+          waiting,
           approval,
           input
         })
@@ -236,6 +248,7 @@ import { createElement as _$createElement } from "@opentui/solid";
 import { createMemo, createSignal, Show } from "solid-js";
 var RIGHT_BUTTON = 2, GLYPH = {
   working: "\u25D0",
+  waiting: "\u25F7",
   approval: "!",
   input: "?",
   failed: "\u2715",
@@ -244,6 +257,7 @@ var RIGHT_BUTTON = 2, GLYPH = {
   idle: "\xB7"
 }, LABEL = {
   working: "Working",
+  waiting: "Waiting",
   approval: "Approval",
   input: "Input",
   failed: "Failed",
@@ -252,6 +266,7 @@ var RIGHT_BUTTON = 2, GLYPH = {
   idle: ""
 }, color = (theme, status) => ({
   working: theme.text.feedback.info.base,
+  waiting: theme.text.muted,
   approval: theme.text.feedback.warning.base,
   input: theme.hue.accent[500],
   failed: theme.text.feedback.error.base,

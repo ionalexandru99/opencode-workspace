@@ -1,10 +1,11 @@
-export type Status = "working" | "approval" | "input" | "failed" | "woke" | "done" | "idle"
+export type Status = "working" | "waiting" | "approval" | "input" | "failed" | "woke" | "done" | "idle"
 export type SectionKey = "pinned" | "active" | "working" | "snoozed" | "settled"
 export type ShelfKey = Extract<SectionKey, "working" | "snoozed" | "settled">
 export type Collapsed = Record<ShelfKey, boolean>
 
 export type Signals = {
   readonly running: boolean
+  readonly waiting: boolean
   readonly approval: boolean
   readonly input: boolean
   readonly failed: boolean
@@ -59,13 +60,15 @@ export function statusOf(entry: Entry, now: number): Status {
   if (signals.failed) return "failed"
   if (mark.snoozedUntil !== undefined && mark.snoozedUntil <= now) return "woke"
   if (signals.unread) return "done"
+  if (signals.waiting) return "waiting"
   return "idle"
 }
 
 export function sectionOf(entry: Entry, now: number): SectionKey {
   if (isSettled(entry)) return "settled"
   if (isSnoozed(entry, now)) return "snoozed"
-  if (entry.signals.running && !isAsking(entry)) return "working"
+  const status = statusOf(entry, now)
+  if (status === "working" || status === "waiting") return "working"
   if (entry.mark.pinned) return "pinned"
   return "active"
 }

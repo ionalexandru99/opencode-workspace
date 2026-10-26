@@ -20,6 +20,7 @@ const snapshot = (patch: Partial<Snapshot> = {}): Snapshot => ({
   sessions: [session()],
   models: {},
   running: [],
+  waiting: [],
   approval: [],
   input: [],
   ...patch,
@@ -50,17 +51,17 @@ describe("toEntries", () => {
     assert.equal(entry.signals.unread, false)
   })
 
-  it("maps pending permissions, forms and running sessions to signals", () => {
+  it("maps pending permissions, forms, running and waiting sessions to signals", () => {
     // Arrange
-    const data = snapshot({ running: ["s1"], approval: ["s1"], input: ["s1"] })
+    const data = snapshot({ running: ["s1"], waiting: ["s1"], approval: ["s1"], input: ["s1"] })
 
     // Act
     const [entry] = toEntries(data, options)
 
     // Assert
     assert.deepEqual(
-      [entry.signals.running, entry.signals.approval, entry.signals.input],
-      [true, true, true],
+      [entry.signals.running, entry.signals.waiting, entry.signals.approval, entry.signals.input],
+      [true, true, true, true],
     )
   })
 

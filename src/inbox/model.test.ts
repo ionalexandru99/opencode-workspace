@@ -10,7 +10,7 @@ const entry = (patch: Partial<Entry> = {}): Entry => ({
   title: "Session",
   project: "alfastar",
   updated: NOW - 5 * MIN,
-  signals: { running: false, approval: false, input: false, failed: false, unread: false },
+  signals: { running: false, waiting: false, approval: false, input: false, failed: false, unread: false },
   mark: {},
   ...patch,
 })
@@ -26,6 +26,39 @@ describe("statusOf", () => {
 
     // Assert
     assert.equal(status, "approval")
+  })
+
+  it("reports a session left waiting on a background shell as waiting", () => {
+    // Arrange
+    const session = entry({ signals: signals({ waiting: true }) })
+
+    // Act
+    const status = statusOf(session, NOW)
+
+    // Assert
+    assert.equal(status, "waiting")
+  })
+
+  it("reports an unread reply over a background shell it left running", () => {
+    // Arrange
+    const session = entry({ signals: signals({ waiting: true, unread: true }) })
+
+    // Act
+    const status = statusOf(session, NOW)
+
+    // Assert
+    assert.equal(status, "done")
+  })
+
+  it("reports a failed run over a background shell it left running", () => {
+    // Arrange
+    const session = entry({ signals: signals({ waiting: true, failed: true }) })
+
+    // Act
+    const status = statusOf(session, NOW)
+
+    // Assert
+    assert.equal(status, "failed")
   })
 
   it("reports a snooze that has run out as woke", () => {
@@ -142,6 +175,39 @@ describe("sectionOf", () => {
 
     // Assert
     assert.equal(section, "working")
+  })
+
+  it("moves a session waiting on a background shell to the working shelf", () => {
+    // Arrange
+    const session = entry({ signals: signals({ waiting: true }) })
+
+    // Act
+    const section = sectionOf(session, NOW)
+
+    // Assert
+    assert.equal(section, "working")
+  })
+
+  it("keeps a failed session in active while its background shell runs", () => {
+    // Arrange
+    const session = entry({ signals: signals({ waiting: true, failed: true }) })
+
+    // Act
+    const section = sectionOf(session, NOW)
+
+    // Assert
+    assert.equal(section, "active")
+  })
+
+  it("keeps a settled session settled while its background shell runs", () => {
+    // Arrange
+    const session = entry({ mark: { settledAt: NOW }, signals: signals({ waiting: true }) })
+
+    // Act
+    const section = sectionOf(session, NOW)
+
+    // Assert
+    assert.equal(section, "settled")
   })
 })
 
