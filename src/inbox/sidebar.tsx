@@ -1,7 +1,7 @@
 import type { CliRenderer, Renderable } from "@opentui/core"
 import { createMemo, createSignal, For, onCleanup, Show } from "solid-js"
 import type { Inbox } from "./inbox.ts"
-import { groupSections, inboxRows, listRows, SHELVES, type Entry, type ShelfKey } from "./model.ts"
+import { groupSections, inboxRows, isCompact, listRows, SHELVES, type SectionKey, type ShelfKey } from "./model.ts"
 import { Row } from "./row.tsx"
 
 const CLOCK_MS = 30_000
@@ -40,14 +40,15 @@ export function InboxSidebar(props: { readonly inbox: Inbox; readonly sessionID:
   const height = () => inboxRows(sharedRows())
   const spacer = () => Math.max(1, height() - listRows(sections(), props.inbox.collapsed))
 
-  const rows = (entries: Entry[]) => (
-    <For each={entries}>
+  const rows = (key: SectionKey) => (
+    <For each={sections()[key]}>
       {(entry) => (
         <Row
           theme={theme}
           entry={entry}
           now={now()}
           current={entry.id === props.sessionID}
+          compact={isCompact(key)}
           onOpen={() => props.inbox.open(entry, now())}
           onActions={() => void props.inbox.actions(entry)}
         />
@@ -75,14 +76,14 @@ export function InboxSidebar(props: { readonly inbox: Inbox; readonly sessionID:
           <text fg={theme.text.base}>
             <b>Pinned</b>
           </text>
-          {rows(sections().pinned)}
+          {rows("pinned")}
           <box height={1} />
         </Show>
         <text fg={theme.text.base}>
           <b>Active</b>
         </text>
         <Show when={sections().active.length} fallback={<text fg={theme.text.muted}>Nothing waiting on you</text>}>
-          {rows(sections().active)}
+          {rows("active")}
         </Show>
         <box height={spacer()} flexShrink={0} />
         <For each={SHELVES.filter((key) => sections()[key].length)}>
@@ -97,7 +98,7 @@ export function InboxSidebar(props: { readonly inbox: Inbox; readonly sessionID:
                   </Show>
                 </text>
               </box>
-              <Show when={!props.inbox.collapsed[key]}>{rows(sections()[key])}</Show>
+              <Show when={!props.inbox.collapsed[key]}>{rows(key)}</Show>
             </>
           )}
         </For>

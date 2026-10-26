@@ -42,6 +42,7 @@ export function Row(props: {
   readonly entry: Entry
   readonly now: number
   readonly current: boolean
+  readonly compact: boolean
   readonly onOpen: () => void
   readonly onActions: () => void
 }) {
@@ -75,24 +76,26 @@ export function Row(props: {
           {when()}
         </text>
       </box>
-      <box flexDirection="row" paddingLeft={2} gap={1}>
-        <text fg={props.theme.text.muted} wrapMode="none" truncate flexShrink={4} minWidth={0}>
-          {props.entry.project}
-        </text>
-        <Show when={props.entry.model}>
-          {(model) => (
-            <text fg={props.theme.text.muted} wrapMode="none" truncate flexShrink={1} minWidth={0}>
-              · {model()}
-            </text>
-          )}
-        </Show>
-        <box flexGrow={1} />
-        <Show when={LABEL[status()]}>
-          <text flexShrink={0} fg={tint()}>
-            {LABEL[status()]}
+      <Show when={!props.compact}>
+        <box flexDirection="row" paddingLeft={2} gap={1}>
+          <text fg={props.theme.text.muted} wrapMode="none" truncate flexShrink={4} minWidth={0}>
+            {props.entry.project}
           </text>
-        </Show>
-      </box>
+          <Show when={props.entry.model}>
+            {(model) => (
+              <text fg={props.theme.text.muted} wrapMode="none" truncate flexShrink={1} minWidth={0}>
+                · {model()}
+              </text>
+            )}
+          </Show>
+          <box flexGrow={1} />
+          <Show when={LABEL[status()]}>
+            <text flexShrink={0} fg={tint()}>
+              {LABEL[status()]}
+            </text>
+          </Show>
+        </box>
+      </Show>
     </box>
   )
 }
